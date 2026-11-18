@@ -36,7 +36,7 @@ def calcular_pago_neto(subtotal_hospedaje: Decimal) -> dict:
     iva_retenido = subtotal_hospedaje * TASA_IVA_RETENIDO
     isr_retenido = subtotal_hospedaje * TASA_ISR_RETENIDO
     
-    # 2. El dinero real que llega a tu banco (CORREGIDO)
+    # 2. El dinero real que llega a tu banco
     neto_banco = subtotal_hospedaje - comision_airbnb_total - iva_retenido - isr_retenido
 
     return {
@@ -61,7 +61,7 @@ def calcular_pisos_tarifa(noches: int, fixed_month: Decimal = Decimal("18000"), 
             cv_night = Decimal(str(politicas.get("cv_night", cv_night)))
             cv_stay = Decimal(str(politicas.get("cv_stay", cv_stay)))
             fee = Decimal(str(politicas.get("fee", fee)))
-        except:
+        except Exception:
             pass
 
     fixed_per_occ_night = fixed_month / (Decimal(str(days)) * occ)
@@ -76,23 +76,37 @@ def calcular_pisos_tarifa(noches: int, fixed_month: Decimal = Decimal("18000"), 
         "piso_marginal_noche": r(piso_marginal)
     }
 
-# --- FUNCIÓN RECUPERADA (La que faltaba) ---
-def margen_descuento_disponible(precio_actual: float, piso_marginal: float, max_pct: float = 0.20) -> float:
+def margen_descuento_disponible(
+    precio_actual: float | Decimal,
+    piso_marginal: float | Decimal | None = None,
+    max_pct: float | Decimal = 0.20,
+    noches: int = 1
+) -> Decimal:
     """
-    Calcula el porcentaje máximo de descuento seguro.
-    Basado en la fórmula de Claude: min(max_pct, max(0, 1 - floor / price))
+    Calcula el porcentaje máximo de descuento seguro en escala 0-100 como Decimal
+    (ej. Decimal('18.50') para 18.50%), compatible con agent_booking.py.
     """
-    precio_actual = Decimal(str(precio_actual))
-    piso_marginal = Decimal(str(piso_marginal))
-    max_pct = Decimal(str(max_pct))
+    precio_actual_dec = Decimal(str(precio_actual))
+    if precio_actual_dec <= 0:
+        return Decimal("0.00")
 
-    if precio_actual <= 0:
-        return 0.0
+    if piso_marginal is None:
+        pisos = calcular_pisos_tarifa(noches=noches)
+        piso_marginal_dec = Decimal(str(pisos["piso_marginal_noche"]))
+    else:
+        piso_marginal_dec = Decimal(str(piso_marginal))
 
-    margen_teorico = Decimal("1") - (piso_marginal / precio_actual)
-    descuento_seguro = max(Decimal("0"), min(max_pct, margen_teorico))
-    
-    return float(descuento_seguro)
+    politicas = cargar_politicas()
+    if politicas:
+        max_pct = politicas.get("max_discount_pct", max_pct)
+    max_pct_dec = Decimal(str(max_pct))
+    if max_pct_dec > Decimal("1"):
+        max_pct_dec = max_pct_dec / Decimal("100")
+
+    margen_teorico = Decimal("1") - (piso_marginal_dec / precio_actual_dec)
+    descuento_seguro = max(Decimal("0"), min(max_pct_dec, margen_teorico))
+
+    return (descuento_seguro * Decimal("100")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 if __name__ == "__main__":
     print("--- PRUEBA MOTOR FINANCIERO (CON RFC) ---")

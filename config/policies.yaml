@@ -30,3 +30,19 @@ booking_rules:
   max_discount_pct: 20.0           # Descuento máximo que el agente puede negociar solo
   min_nights: 1
   max_nights: 30
+  # Ficha técnica verificada de esta propiedad (Nuevo León)
+property_profile:
+  municipio: "Monterrey, Nuevo León"
+  zona: "Las Villas"
+  tipo: "Departamento"
+  amenidades_reales:
+    - "Wi-Fi de alta velocidad"
+    - "Aire acondicionado frío/calor"
+    - "Estacionamiento incluido"
+    - "Cocina equipada"
+    - "Facturación CFDI disponible"
+  amenidades_prohibidas:
+    - "alberca"
+    - "jacuzzi"
+    - "mascotas"
+    - "gimnasio"

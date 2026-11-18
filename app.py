@@ -3,55 +3,136 @@ from decimal import Decimal
 import pandas as pd
 
 from db import get_connection
-from pricing import cargar_politicas, calcular_pago_neto, calcular_pisos_tarifa
+from pricing import cargar_politicas, calcular_pago_neto
 from calendar_engine import listar_reservas_activas, detectar_huecos_huerfanos, verificar_disponibilidad
 from agent_booking import procesar_mensaje_huesped
 from agent_ops import generar_plan_limpieza_y_turnovers, calcular_net_parity
 from agent_auditor import analizar_evidencia_danos
 from agent_listing import generar_anuncios_y_geo
-from director import ejecutar_director
+from director import ejecutar_director, obtener_conocimiento_activo
 from reconcile import auditar_reservas_vs_pagos
 
-st.set_page_config(page_title="Depa Las Villas - AI Property OS", page_icon="🏢", layout="wide")
+st.set_page_config(page_title="Director Inmobiliario 360° — AI OS", page_icon="🧠", layout="wide")
 
 politicas = cargar_politicas()
-st.title(f"🏢 {politicas.get('property_name', 'Depa Las Villas')} — AI Property Management OS")
-st.caption("Monterrey, N.L. • Arquitectura Multi-Agente + Motores Deterministas + SQLite WAL (Modo Sombra L0)")
+nombre_propiedad = politicas.get("property_name", "Propiedad Activa")
 
-tabs = st.tabs([
-    "🧠 Director 360°",
-    "💬 Booking & Negociación",
-    "📅 Calendario y Huecos",
-    "🧹 Operaciones & Paridad",
-    "🛡️ Auditor AirCover (L3)",
-    "📣 Listing & GEO",
-    "💰 Finanzas & RFC",
-    "📜 Bitácora (Events)"
-])
+# --- BARRA LATERAL (Configuración + Herramientas Avanzadas) ---
+with st.sidebar:
+    st.title(f"🏢 {nombre_propiedad}")
+    st.caption("Nuevo León • Modo Sombra (L0)")
 
-# --- TAB 1: DIRECTOR 360° ---
-with tabs[0]:
-    st.subheader("Orquestador Central y Consultor Estratégico")
-    consulta_dir = st.text_area(
-        "Pídele cualquier análisis o acción al Director:",
-        value="Dame un resumen ejecutivo de cómo estamos hoy en Depa Las Villas, qué huecos tenemos y qué tarifa me recomiendas para llenarlos.",
-        height=110
+    modo_vista = st.radio(
+        "Modo de trabajo:",
+        [
+            "🧠 Chat con Director 360°",
+            "💬 Simulador Booking",
+            "📅 Calendario y Huecos",
+            "🧹 Operaciones & Paridad",
+            "🛡️ Auditor AirCover (L3)",
+            "📣 Listing & GEO",
+            "💰 Finanzas & RFC",
+            "📜 Bitácora y Memoria"
+        ],
+        index=0
     )
-    tarifa_ref = st.number_input("Tarifa Lista de Referencia (MXN):", min_value=300.0, value=1300.0, step=50.0, key="dir_tarifa")
-    if st.button("Ejecutar Director", type="primary"):
-        with st.spinner("Enrutando y consultando motores..."):
-            out = ejecutar_director(consulta_dir, tarifa_actual_noche=Decimal(str(tarifa_ref)))
-        st.info(f"**Trace ID:** `{out['trace_id']}` | **Ruta activada:** `{out['ruta_activada']}` | {out['resumen_auditoria']}")
-        res = out["resultado"]
-        if isinstance(res, dict) and "analisis_ejecutivo" in res:
-            st.markdown(res["analisis_ejecutivo"])
-            with st.expander("Datos base verificados"):
-                st.json(res["datos_base_utilizados"])
-        else:
-            st.json(res)
 
-# --- TAB 2: AGENTE DE BOOKING ---
-with tabs[1]:
+    st.divider()
+    tarifa_global = st.number_input(
+        "Tarifa Lista Base (MXN/noche):",
+        min_value=300.0,
+        value=1300.0,
+        step=50.0
+    )
+
+    if st.button("🗑️ Limpiar historial de chat", use_container_width=True):
+        st.session_state.mensajes_chat = []
+        st.rerun()
+
+# ==============================================================================
+# VISTA PRINCIPAL: CHAT PURO CON EL DIRECTOR 360° Y TODOS SUS SUPERPODERES
+# ==============================================================================
+if modo_vista == "🧠 Chat con Director 360°":
+    st.title("🧠 Director Inmobiliario 360°")
+    st.caption("Conversa libremente: analiza propiedades, negocia con huéspedes, consulta tu calendario o enséñame nuevas reglas.")
+
+    if "mensajes_chat" not in st.session_state:
+        st.session_state.mensajes_chat = [
+            {
+                "role": "assistant",
+                "content": (
+                    f"¡Hola! Soy tu **Director Inmobiliario 360°** para **{nombre_propiedad}**.\n\n"
+                    "Tengo conectados en tiempo real tu calendario de Airbnb, tu calculadora fiscal con RFC, "
+                    "tu motor de negociación con límites y mi memoria persistente. ¿Qué revisamos hoy?"
+                ),
+                "meta": None
+            }
+        ]
+
+    # Botones rápidos de sugerencia si la conversación apenas inicia
+    if len(st.session_state.mensajes_chat) == 1:
+        c1, c2, c3 = st.columns(3)
+        sugerencia_1 = "Dame un resumen ejecutivo de cómo estamos hoy, qué huecos tenemos y qué tarifa recomiendas."
+        sugerencia_2 = "Un huésped pide 3 noches del 2026-12-23 al 2026-12-26 con 18% de descuento. ¿Qué le respondo?"
+        sugerencia_3 = "Aprende que en fines de semana de concierto o festival en Monterrey no damos ningún descuento."
+
+        prompt_rapido = None
+        if c1.button("📊 Diagnóstico y huecos hoy", use_container_width=True):
+            prompt_rapido = sugerencia_1
+        if c2.button("💬 Probar negociación huésped", use_container_width=True):
+            prompt_rapido = sugerencia_2
+        if c3.button("🧠 Enseñarle una regla nueva", use_container_width=True):
+            prompt_rapido = sugerencia_3
+    else:
+        prompt_rapido = None
+
+    # Mostrar historial de conversación
+    for msg in st.session_state.mensajes_chat:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+            if msg.get("meta"):
+                with st.expander(f"🔍 Superpoderes activados ({msg['meta']['ruta']} • Trace: {msg['meta']['trace_id']})"):
+                    st.json(msg["meta"]["datos"])
+
+    # Entrada de chat libre
+    entrada_usuario = st.chat_input("Escribe aquí tu pregunta, mensaje de huésped o regla para que aprenda...")
+    mensaje_final = prompt_rapido or entrada_usuario
+
+    if mensaje_final:
+        st.session_state.mensajes_chat.append({"role": "user", "content": mensaje_final, "meta": None})
+        with st.chat_message("user"):
+            st.markdown(mensaje_final)
+
+        with st.chat_message("assistant"):
+            with st.spinner("Pensando y consultando motores..."):
+                out = ejecutar_director(
+                    mensaje_final,
+                    tarifa_actual_noche=Decimal(str(tarifa_global)),
+                    historial_chat=st.session_state.mensajes_chat
+                )
+            res = out["resultado"]
+            respuesta_texto = res.get("analisis_ejecutivo", str(res))
+            st.markdown(respuesta_texto)
+
+            meta_info = {
+                "trace_id": out["trace_id"],
+                "ruta": out["ruta_activada"],
+                "datos": res.get("datos_base_utilizados", res)
+            }
+            with st.expander(f"🔍 Superpoderes activados ({meta_info['ruta']} • Trace: {meta_info['trace_id']})"):
+                st.json(meta_info["datos"])
+
+        st.session_state.mensajes_chat.append({
+            "role": "assistant",
+            "content": respuesta_texto,
+            "meta": meta_info
+        })
+        st.rerun()
+
+# ==============================================================================
+# HERRAMIENTAS TÉCNICAS AVANZADAS (Accesibles desde el menú lateral)
+# ==============================================================================
+elif modo_vista == "💬 Simulador Booking":
     st.subheader("Asistente de Reservas y Negociación con Límites")
     c1, c2 = st.columns([2, 1])
     with c1:
@@ -61,7 +142,7 @@ with tabs[1]:
             height=120
         )
     with c2:
-        tarifa_bk = st.number_input("Tarifa Lista Actual (MXN):", min_value=300.0, value=1300.0, step=50.0, key="bk_tarifa")
+        tarifa_bk = st.number_input("Tarifa Lista Actual (MXN):", min_value=300.0, value=float(tarifa_global), step=50.0)
         btn_bk = st.button("Analizar y Redactar Respuesta", type="primary", use_container_width=True)
 
     if btn_bk and msg_huesped.strip():
@@ -76,8 +157,7 @@ with tabs[1]:
         st.success("**Borrador listo para copiar (Modo Sombra L0):**")
         st.code(res_bk["borrador_respuesta"], language=None)
 
-# --- TAB 3: CALENDARIO Y DÍAS HUÉRFANOS ---
-with tabs[2]:
+elif modo_vista == "📅 Calendario y Huecos":
     st.subheader("Disponibilidad y Radar de Días Huérfanos")
     cv1, cv2, cv3 = st.columns(3)
     with cv1:
@@ -107,8 +187,7 @@ with tabs[2]:
         for h in huecos:
             st.warning(f"**{h['inicio_libre']} al {h['fin_libre']}** ({h['noches_huerfanas']} noches)\n\nEntre {h['entre_reservas']}.")
 
-# --- TAB 4: OPERACIONES & NET-PARITY ---
-with tabs[3]:
+elif modo_vista == "🧹 Operaciones & Paridad":
     st.subheader("Órdenes de Limpieza, Back-to-Backs y Paridad Multicanal")
     neto_meta = st.number_input("Ingreso Neto Deseado por Noche en Banco (MXN):", min_value=300.0, value=1000.0, step=50.0)
     paridad = calcular_net_parity(Decimal(str(neto_meta)))
@@ -119,15 +198,12 @@ with tabs[3]:
             value=f"${datos['precio_publico_mxn']} MXN",
             delta=f"Neto: ${datos['neto_recibido_mxn']} (-{datos['comision_efectiva_pct']}%)"
         )
-
     st.divider()
-    st.markdown("**Cronograma de Limpieza y Alertas Turnovers**")
     ordenes = generar_plan_limpieza_y_turnovers()
     if ordenes:
         st.dataframe(pd.DataFrame(ordenes), use_container_width=True, hide_index=True)
 
-# --- TAB 5: AUDITOR AIRCOVER (L3) ---
-with tabs[4]:
+elif modo_vista == "🛡️ Auditor AirCover (L3)":
     st.subheader("Peritaje de Daños y Relojes Legales AirCover (Nivel L3)")
     ca1, ca2 = st.columns(2)
     with ca1:
@@ -147,38 +223,26 @@ with tabs[4]:
         st.info(rep_claim["accion_permitida"])
         st.code(rep_claim["evaluacion_pericial"]["borrador_reclamo_resolucion"], language=None)
 
-# --- TAB 6: LISTING & GEO ---
-with tabs[5]:
+elif modo_vista == "📣 Listing & GEO":
     st.subheader("Generador Multicanal + Optimización GEO (Cero Alucinaciones)")
+    perfil_propiedad = politicas.get("property_profile", {
+        "property_id": politicas.get("property_id", "propiedad-nl"),
+        "municipio": "Nuevo León, México",
+    })
+    no_tiene = perfil_propiedad.get("amenidades_prohibidas", [])
     feedback_txt = st.text_area(
-        "Pega reseñas o preguntas reales de huéspedes (una por línea):",
-        value="El internet vuela para hacer home office todo el día sin cortes.\nSúper fácil entrar de noche con la chapa electrónica y el cajón de estacionamiento.\nEl aire acondicionado enfría riquísimo en verano en Monterrey."
+        "Reseñas o preguntas frecuentes de huéspedes (opcional):",
+        value="",
+        placeholder="Ej. El internet vuela para hacer home office..."
     )
     if st.button("Generar Copys Validados (Airbnb / Booking / Vrbo)", type="primary"):
-        ficha_depa = {
-            "nombre": "Depa Las Villas",
-            "ciudad": "Monterrey, Nuevo León",
-            "tipo": "Departamento completo",
-            "recamaras": 2,
-            "capacidad": 4,
-            "amenidades_reales": [
-                "Wi-Fi de alta velocidad fibra óptica",
-                "Aire acondicionado frío/calor",
-                "Cocina equipada",
-                "Estacionamiento privado",
-                "Cerradura inteligente (self check-in)",
-                "Zona residencial tranquila"
-            ]
-        }
-        no_tiene = ["alberca", "piscina", "jacuzzi", "gimnasio", "pet friendly", "mascotas"]
         lineas = [l.strip() for l in feedback_txt.splitlines() if l.strip()]
         with st.spinner("Generando copys y auditando amenidades..."):
-            res_geo = generar_anuncios_y_geo(ficha_depa, lineas, no_tiene)
+            res_geo = generar_anuncios_y_geo(perfil_propiedad, lineas, no_tiene)
         st.success(f"**Claim Checker:** {res_geo['gate_claim_checker']} | **Longitudes:** {res_geo['longitudes_validadas']}")
         st.json(res_geo["resultado"])
 
-# --- TAB 7: FINANZAS & RFC ---
-with tabs[6]:
+elif modo_vista == "💰 Finanzas & RFC":
     st.subheader("Conciliación Bancaria y Calculadora Fiscal RFC")
     conc = auditar_reservas_vs_pagos()
     resumen = conc["resumen"]
@@ -199,8 +263,16 @@ with tabs[6]:
         f"**Depósito Neto Real: ${desglose['tu_ganas_neto']} MXN**"
     )
 
-# --- TAB 8: BITÁCORA DE AUDITORÍA ---
-with tabs[7]:
+elif modo_vista == "📜 Bitácora y Memoria":
+    st.subheader("Reglas Aprendidas por el Director (`knowledge` en SQLite)")
+    reglas = obtener_conocimiento_activo(limite=50)
+    if reglas:
+        for r_txt in reglas:
+            st.info(r_txt)
+    else:
+        st.caption("Aún no le has enseñado reglas en el chat. Dile 'Aprende que...' en el chat principal.")
+
+    st.divider()
     st.subheader("Registro Append-Only de Decisiones (`events` en SQLite)")
     conn = get_connection()
     try:
