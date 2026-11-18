@@ -1,0 +1,32 @@
+# Políticas operativas y financieras del Copiloto (AI Property Management OS)
+property_id: "depa-las-villas"
+property_name: "Depa Las Villas"
+currency: "MXN"
+
+# Costos operativos reales de Depa Las Villas
+property_costs:
+  fixed_monthly_mxn: 9400.00       # Renta ($8,000) + Internet ($600) + Depreciación ($800)
+  expected_occupancy_pct: 60.0     # Ocupación esperada al mes (60% = 18 noches)
+  variable_per_night_mxn: 100.00   # CFE ($1,000) + Agua ($500) + Gas ($300) prorrateado a 18 noches
+  cleaning_per_stay_mxn: 350.00    # Costo por servicio de limpieza ($1,500/mes dividido entre ~4-5 estancias)
+  min_marginal_margin_pct: 15.0    # Ganancia mínima exigida en noches de última hora
+
+# Configuración financiera real de Airbnb México (verificada en desglose)
+commission:
+  platform: "airbnb"
+  model: "host_fee_only"
+  base_rate_pct: 16.0              # 16.0% tarifa de servicio para anfitriones
+  vat_on_commission_pct: 16.0      # + 16% IVA sobre la comisión (tasa efectiva: 18.56%)
+
+# Retenciones fiscales en México (Régimen Plataformas Tecnológicas CON RFC)
+taxes_mexico:
+  has_rfc_registered: true
+  guest_vat_pct: 16.0              # IVA trasladado al huésped (+16%)
+  vat_withholding_pct: 8.0         # Retención del 50% del IVA (-8% sobre subtotal)
+  isr_withholding_pct: 4.0         # Retención de ISR (-4% sobre subtotal)
+
+# Reglas de negocio para reservas
+booking_rules:
+  max_discount_pct: 20.0           # Descuento máximo que el agente puede negociar solo
+  min_nights: 1
+  max_nights: 30

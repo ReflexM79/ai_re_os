@@ -1,0 +1,6 @@
+﻿codigo_reserva,checkin,checkout,precio_total,comision_airbnb,neto,huesped
+HM001,2026-12-15,2026-12-20,6000.00,930.00,5070.00,Huesped Prueba 1
+HM002,2026-12-22,2026-12-27,7500.00,1162.50,6337.50,Huesped Prueba 2
+HM003,2027-01-03,2027-01-08,5400.00,837.00,4563.00,Huesped Prueba 3
+HM004,2027-01-15,2027-01-18,3600.00,558.00,3042.00,Huesped Prueba 4
+HM005,2027-02-10,2027-02-15,6500.00,1007.50,5492.50,Huesped Prueba 5
